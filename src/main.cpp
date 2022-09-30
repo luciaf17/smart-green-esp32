@@ -1,17 +1,21 @@
-//VERY IMPORTANT
-//to see colors in terminals add this line at the end of platformio.ini
-//monitor_flags = --raw
 #include <Arduino.h>
 #include "IoTicosSplitter.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
+#include "DHT.h"
+#include <Adafruit_Sensor.h>
 
-String dId = "212121";
-String webhook_pass = "24NbZkoZhI";
+String dId = "123456";
+String webhook_pass = "k3sUg5o1PR";
 String webhook_endpoint = "http://192.168.1.108:3001/api/getdevicecredentials";
 const char *mqtt_server = "192.168.1.108";
+
+//SENSOR TEMP Y HUM
+#define DHTPIN 4     // Digital pin connected to the DHT sensor
+#define DHTTYPE DHT22 
+DHT dht(DHTPIN, DHTTYPE);
 
 //PINS
 #define led 2
@@ -46,6 +50,7 @@ void setup()
   Serial.begin(921600);
   pinMode(led, OUTPUT);
   clear();
+  dht.begin();
 
   Serial.print("\n\n\nWiFi Connection in Progress");
 
@@ -82,81 +87,54 @@ void loop()
   check_mqtt_connection();
 }
 
-int prev_temp = 0;
+double prev_temp = 0;
 int prev_hum = 0;
-int prev_co2 = 0;
 
 void process_sensors()
 {
 
-  //get temp simulation
-  int temp = random(1, 100);
+  //get temp 
+  double temp = dht.readTemperature();
   mqtt_data_doc["variables"][0]["last"]["value"] = temp;
+  mqtt_data_doc["variables"][2]["last"]["value"] = temp;
+  mqtt_data_doc["variables"][2]["last"]["save"] = 0;
 
   //save temp?
-  int dif = temp - prev_temp;
-  if (dif < 0)
-  {
-    dif *= -1;
-  }
+  double dif_temp = temp - prev_temp;
 
-  if (dif >= 40)
+  if (dif_temp >= 2.0)
   {
     mqtt_data_doc["variables"][0]["last"]["save"] = 1;
   }
-  else
+  else if (dif_temp <= 2)
   {
-    mqtt_data_doc["variables"][0]["last"]["save"] = 0;
+    mqtt_data_doc["variables"][0]["last"]["save"] = 1;
   }
 
   prev_temp = temp;
 
-  //get humidity simulation
-  int hum = random(1, 50);
+  //get humidity 
+  int hum = dht.readHumidity();
   mqtt_data_doc["variables"][1]["last"]["value"] = hum;
+  mqtt_data_doc["variables"][3]["last"]["value"] = hum;
+  mqtt_data_doc["variables"][3]["last"]["save"] = 0;
 
   //save hum?
-  dif = hum - prev_hum;
-  if (dif < 0)
-  {
-    dif *= -1;
-  }
+  int dif_hum = hum - prev_hum;
 
-  if (dif >= 20)
+  if (dif_hum >= 10)
   {
     mqtt_data_doc["variables"][1]["last"]["save"] = 1;
   }
-  else
+  else if (dif_hum <= 10)
   {
-    mqtt_data_doc["variables"][1]["last"]["save"] = 0;
-  }
-
-  prev_hum = hum;
-
-  //get c02 simulation
-  int co2 = random(1, 50);
-  mqtt_data_doc["variables"][5]["last"]["value"] = co2;
-
-  //save hum?
-  dif = co2 - prev_co2;
-  if (dif < 0)
-  {
-    dif *= -1;
-  }
-
-  if (dif >= 20)
-  {
-    mqtt_data_doc["variables"][5]["last"]["save"] = 1;
-  }
-  else
-  {
-    mqtt_data_doc["variables"][5]["last"]["save"] = 0;
+    mqtt_data_doc["variables"][1]["last"]["save"] = 1;
   }
 
   prev_hum = hum;
 
   //get led status
-  mqtt_data_doc["variables"][4]["last"]["value"] = (HIGH == digitalRead(led));
+  //mqtt_data_doc["variables"][4]["last"]["value"] = (HIGH == digitalRead(led));
 }
 
 void process_actuators()
